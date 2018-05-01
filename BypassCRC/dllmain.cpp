@@ -4,6 +4,8 @@
 #include "MemAccess.h"
 #include <tchar.h> 
 #include <stdio.h>
+#include <Shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
 
 PUCHAR image_base = nullptr;
 PUCHAR image_end = nullptr;
@@ -25,10 +27,10 @@ UINT32 Memorycrc_retn2 = Memorycrc_check2 + 0x8;
  
  
  //国服
-UINT32 Memorycrc_check1 = 0x01224176;
-UINT32 Memorycrc_retn1 = 0x0122426C;
-UINT32 Memorycrc_check2 = 0x0102E7BA;
-UINT32 Memorycrc_retn2 = Memorycrc_check2 + 0x7;
+UINT32 Memorycrc_check1 = 0x12596CB;
+UINT32 Memorycrc_retn1 = 0x12597CC;
+UINT32 Memorycrc_check2 = 0x1033692;
+UINT32 Memorycrc_retn2 = Memorycrc_check2 + 0x10;
 
 
 bool _isLoaded;
@@ -39,13 +41,13 @@ NAKED crc_check2()
 {
 	__asm {
 
-		mov eax, [eax];
-		cmp eax, image_end;
+		mov esi, [esi];
+		cmp esi, image_end;
 		jg nobypass;
-		cmp eax, image_base;
+		cmp esi, image_base;
 		jl nobypass;
-		sub eax, image_base;
-		add eax, image_copy;
+		sub esi, image_base;
+		add esi, image_copy;
 		
 
 		/*
@@ -75,6 +77,10 @@ NAKED crc_check2()
 		//add ebx, ebp;
 		//国服不需要这一句
 		//xor edx, 0x00000080;
+		mov esi, [esi];
+		mov edx, ebp;
+		sub ax, 0x2048;
+		add edx, 0x0000000C;
 		jmp[Memorycrc_retn2];
 
 		/*
@@ -99,15 +105,32 @@ NAKED crc_check2()
 
 void Initialize_bypasscrc_t()
 {
+	
 	image_base = reinterpret_cast<unsigned char*>(GetModuleHandle(L"KartRider.exe"));
 	IMAGE_NT_HEADERS* nt_header = PIMAGE_NT_HEADERS(image_base + PIMAGE_DOS_HEADER(image_base)->e_lfanew);
 	image_copy = reinterpret_cast<unsigned char*>(malloc(nt_header->OptionalHeader.SizeOfImage));
 	memcpy(image_copy, image_base, nt_header->OptionalHeader.SizeOfImage);
 	image_end = image_base + nt_header->OptionalHeader.SizeOfImage;
+		/*
+	image_base = reinterpret_cast<unsigned char*>(GetModuleHandle(L"KartRider.exe")) + 0xD00000;
+	//IMAGE_NT_HEADERS* nt_header = PIMAGE_NT_HEADERS(image_base + PIMAGE_DOS_HEADER(image_base)->e_lfanew);
+	image_copy = reinterpret_cast<unsigned char*>(malloc(0x200000));
+	memcpy(image_copy, image_base, 0x200000);
+	image_end = image_base + 0x200000;
+	*/
+
+	/*
+	image_base = reinterpret_cast<unsigned char*>(GetModuleHandle(L"KartRider.exe")) +Memorycrc_check1;
+	//IMAGE_NT_HEADERS* nt_header = PIMAGE_NT_HEADERS(image_base + PIMAGE_DOS_HEADER(image_base)->e_lfanew);
+	image_copy = reinterpret_cast<unsigned char*>(malloc(0x200000));
+	memcpy(image_copy, image_base, 0x200000);
+	image_end = image_base + 0x200000;
+	*/
 
 	// 弹出调试信息
 	//TCHAR  sz[256];
 	//_stprintf(sz, L"CRC 拷贝地址:%x,CRC2作弊地址:%x", image_copy, (DWORD)crc_check2);
+	//_stprintf(sz, L"CRC 拷贝地址:%x,CRC拷贝结束地址:%x", image_base, image_end);
 	//MessageBox(NULL, sz, TEXT("标题"), MB_OK);
 
 	WriteJump((void *)Memorycrc_check1, (void *)Memorycrc_retn1);
@@ -135,6 +158,7 @@ long KsCreateTopologyNode(long var1, long var2, long var3, long var4)
 	return 0;
 }*/
 
+
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
@@ -144,6 +168,18 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
 	if (_isLoaded == false && ul_reason_for_call == DLL_PROCESS_ATTACH)
 	{
+		char cProcessName[MAX_PATH] = { 0 };
+		if (!GetModuleFileNameA(GetModuleHandleA(NULL), cProcessName, MAX_PATH))
+		{
+			::MessageBox(NULL, L"GetModuleFileNameA failed", L"Notice", 0);
+			return FALSE;
+		}
+
+		if (StrStrIA(cProcessName, "AdBalloonExt.exe"))
+		{
+			exit(1);
+			return TRUE;
+		}
 		_isLoaded = true;
 		Initialize_bypasscrc_t();
 		DisableThreadLibraryCalls(hModule);
